@@ -6,6 +6,11 @@ Usage:
     $ python path/to/detect.py --source path/to/img.jpg --weights yolov5s.pt --img 640
 """
 
+import serial #for communication with the Arduino
+import time #for communication with the Arduino
+
+import re
+
 import argparse
 import sys
 import time
@@ -26,6 +31,11 @@ from utils.general import check_img_size, check_requirements, check_imshow, colo
 from utils.plots import colors, plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_sync
 
+ser = serial.Serial('/dev/cu.usbserial-14320', 9600, timeout=1)
+
+def move(value):
+    ser.write(chr(value).encode('utf-8'))
+    print(value)
 
 @torch.no_grad()
 def run(weights='yolov5s.pt',  # model.pt path(s)
@@ -201,12 +211,45 @@ def run(weights='yolov5s.pt',  # model.pt path(s)
                     if save_img or save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
                         label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
-                        im0 = plot_one_box(xyxy, im0, label=label, color=colors(c, True), line_width=line_thickness)
+                        im0 = plot_one_box(xyxy, im0, label=label, color=colors(c, True), line_width=line_thickness) #labels and forms the box for the livestream
                         if save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
+            check = re.findall(r'[0-9]+', str(xyxy))
+            x1 = int(check[0])
+            y1 = int(check[1])
+            x2 = int(check[2])
+            y2 = int(check[3])
+            centerX = (x2 - x1)/2 + x1
+            centerY = (y2 - y1)/2 + y1
+            length = x2 - x1
+            height = y2 - y1
+            #resolution for this webcam is 1280 by 720
+            absoluteX = 640 #true x center of output stream
+            absoluteY = 360 #true y center of output stream
+            bounds = 50 #limits for the center box
+            #print(centerX, centerY)
+
+            if centerY > absoluteY + 50:
+                move(0)
+                print("Too high")
+            elif centerY < absoluteY - 50:
+                move(1)
+                print("Too low")
+            else:
+                print("Y fine")
+            if centerX > absoluteX + 50:
+                move(2)
+                print("Too right")
+            elif centerX < absoluteX - 50:
+                move(3)
+                print("Too left")
+            else:
+                print("X fine")
+            
+
 
             # Stream results
             if view_img:
